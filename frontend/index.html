@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NIFTY 50 · AI Stock Recommender</title>
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+
+<style>
+/* ── Reset & Base ─────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #06080f;
+  --surface:   #0b0f1c;
+  --surface2:  #101628;
+  --border:    #1c253d;
+  --border2:   #263049;
+  --teal:      #00e5b0;
+  --teal-dim:  #00a07a;
+  --amber:     #ffaa00;
+  --rose:      #ff4570;
+  --blue:      #3d8eff;
+  --text:      #ccd6f6;
+  --muted:     #5a6a8a;
+  --font-head: 'Syne', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Background grid ──────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0;
+  background-image:
+    linear-gradient(rgba(0,229,176,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,176,.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+}
+
+/* ── Layout ───────────────────────────────────────────── */
+.app {
+  position: relative; z-index: 1;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+}
+
+/* ── Header ───────────────────────────────────────────── */
+header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 32px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(6,8,15,.85);
+  backdrop-filter: blur(12px);
+  position: sticky; top: 0; z-index: 100;
+}
+
+.logo {
+  display: flex; align-items: center; gap: 14px;
+}
+
+.logo-mark {
+  width: 36px; height: 36px;
+  border: 2px solid var(--teal);
+  display: grid; place-items: center;
+  font-family: var(--font-head);
+  font-weight: 800; font-size: 16px;
+  color: var(--teal);
+  position: relative;
+}
+.logo-mark::after {
+  content: '';
+  position: absolute; inset: 3px;
+  background: var(--teal);
+  opacity: .12;
+}
+
+.logo-text {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: .01em;
+}
+.logo-text span { color: var(--teal); }
+
+.header-right {
+  display: flex; align-items: center; gap: 16px;
+}
+
+.status-pill {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--border2);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: pulse 2s infinite;
+}
+.status-dot.ready { background: var(--teal); }
+@keyframes pulse {
+  0%,100% { opacity: 1; } 50% { opacity: .3; }
+}
+
+/* ── Sidebar ──────────────────────────────────────────── */
+.sidebar {
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  padding: 28px 24px;
+  overflow-y: auto;
+  height: calc(100vh - 61px);
+  position: sticky;
+  top: 61px;
+}
+
+.sidebar-section {
+  margin-bottom: 28px;
+}
+
+.sidebar-label {
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.sidebar-label::after {
+  content: ''; flex: 1;
+  height: 1px; background: var(--border);
+}
+
+/* Sliders */
+.slider-group { margin-bottom: 18px; }
+
+.slider-header {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 6px;
+}
+.slider-name {
+  font-size: 11px;
+  color: var(--text);
+  letter-spacing: .02em;
+}
+.slider-val {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--teal);
+  min-width: 36px;
+  text-align: right;
+}
+
+.slider-labels {
+  display: flex; justify-content: space-between;
+  font-size: 9px; color: var(--muted);
+  margin-top: 3px;
+  letter-spacing: .03em;
+}
+
+input[type=range] {
+  -webkit-appearance: none;
+  width: 100%; height: 2px;
+  background: var(--border2);
+  outline: none; cursor: pointer;
+  border-radius: 1px;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--teal);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 8px rgba(0,229,176,.4);
+  transition: transform .15s, box-shadow .15s;
+}
+input[type=range]::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
+  box-shadow: 0 0 16px rgba(0,229,176,.6);
+}
+
+/* Sector chips */
+.chip-grid {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.chip {
+  padding: 4px 10px;
+  border: 1px solid var(--border2);
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all .15s;
+  user-select: none;
+}
+.chip:hover { border-color: var(--teal-dim); color: var(--teal); }
+.chip.active {
+  border-color: var(--teal);
+  background: rgba(0,229,176,.1);
+  color: var(--teal);
+}
+
+/* Controls */
+.control-row { display: flex; gap: 10px; margin-bottom: 12px; }
+.select-wrap { flex: 1; }
+.select-wrap label {
+  display: block; font-size: 10px; color: var(--muted);
+  margin-bottom: 5px; letter-spacing: .04em;
+}
+select, .number-input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 7px 10px;
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color .15s;
+}
+select:focus, .number-input:focus { border-color: var(--teal); }
+input[type=number] {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 7px 10px;
+  outline: none;
+}
+input[type=number]:focus { border-color: var(--teal); }
+
+/* Run button */
+.btn-run {
+  width: 100%;
+  padding: 14px;
+  background: var(--teal);
+  color: var(--bg);
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: all .2s;
+}
+.btn-run::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.15), transparent);
+  transform: translateX(-100%);
+  transition: transform .5s;
+}
+.btn-run:hover { background: #00ffca; }
+.btn-run:hover::before { transform: translateX(100%); }
+.btn-run:active { transform: scale(.98); }
+.btn-run:disabled {
+  background: var(--border2); color: var(--muted); cursor: not-allowed;
+}
+
+.btn-refresh {
+  width: 100%; padding: 8px;
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: all .15s;
+}
+.btn-refresh:hover { border-color: var(--amber); color: var(--amber); }
+
+/* ── Main content ─────────────────────────────────────── */
+.main {
+  overflow-y: auto;
+  padding: 32px;
+  height: calc(100vh - 61px);
+}
+
+/* ── Landing state ────────────────────────────────────── */
+.landing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 70vh;
+  text-align: center;
+  gap: 24px;
+}
+
+.landing-glyph {
+  width: 120px; height: 120px;
+  border: 1px solid var(--border2);
+  border-radius: 50%;
+  display: grid; place-items: center;
+  position: relative;
+}
+.landing-glyph::before {
+  content: '';
+  position: absolute; inset: -6px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  border-top-color: var(--teal);
+  animation: spin 3s linear infinite;
+}
+.landing-glyph::after {
+  content: '';
+  position: absolute; inset: -12px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  border-bottom-color: var(--teal-dim);
+  animation: spin 5s linear infinite reverse;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.landing-icon {
+  font-size: 44px;
+  filter: drop-shadow(0 0 20px var(--teal));
+}
+
+.landing h2 {
+  font-family: var(--font-head);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+
+.landing p { color: var(--muted); max-width: 420px; line-height: 1.7; }
+
+.flow-diagram {
+  display: flex; align-items: center; gap: 0;
+  flex-wrap: wrap; justify-content: center;
+  margin-top: 8px;
+}
+.flow-box {
+  padding: 6px 14px;
+  border: 1px solid var(--border2);
+  font-size: 10px;
+  letter-spacing: .04em;
+  color: var(--muted);
+}
+.flow-box.accent { border-color: var(--teal-dim); color: var(--teal); }
+.flow-arrow {
+  font-size: 14px; color: var(--border2); padding: 0 4px;
+}
+
+/* ── Loading overlay ──────────────────────────────────── */
+.loading-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(6,8,15,.88);
+  backdrop-filter: blur(4px);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 20px;
+}
+.loading-overlay.active { display: flex; }
+
+.loader-ring {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  border: 2px solid var(--border2);
+  border-top-color: var(--teal);
+  animation: spin .8s linear infinite;
+}
+
+.loader-text {
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  animation: blink 1.4s ease-in-out infinite;
+}
+.loader-sub { font-size: 11px; color: var(--muted); }
+@keyframes blink { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+
+/* ── Results ──────────────────────────────────────────── */
+.results { display: none; }
+.results.visible { display: block; animation: fadeUp .4s ease; }
+@keyframes fadeUp {
+  from { opacity:0; transform: translateY(16px); }
+  to   { opacity:1; transform: translateY(0); }
+}
+
+/* Section headers */
+.section-head {
+  display: flex; align-items: baseline; gap: 12px;
+  margin-bottom: 20px;
+  margin-top: 36px;
+}
+.section-head:first-child { margin-top: 0; }
+.section-head h3 {
+  font-family: var(--font-head);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.section-head .tag {
+  font-size: 9px;
+  padding: 2px 8px;
+  border: 1px solid var(--teal-dim);
+  color: var(--teal);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+/* Stock cards grid */
+.stock-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.stock-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--teal);
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color .2s, transform .15s;
+  cursor: default;
+}
+.stock-card::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(0,229,176,.04) 0%, transparent 60%);
+  pointer-events: none;
+}
+.stock-card:hover { transform: translateY(-2px); border-color: var(--teal); }
+
+.card-rank { font-size: 9px; color: var(--muted); letter-spacing: .06em; margin-bottom: 6px; }
+.card-ticker { font-family: var(--font-head); font-size: 20px; font-weight: 800; color: var(--text); }
+.card-sector { font-size: 10px; color: var(--teal); margin-top: 2px; margin-bottom: 10px; }
+.card-stats { display: flex; flex-direction: column; gap: 4px; }
+.card-stat {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: var(--muted);
+}
+.card-stat span:last-child { color: var(--text); }
+.card-match {
+  position: absolute; top: 12px; right: 12px;
+  font-size: 10px; font-weight: 500;
+  color: var(--teal);
+}
+
+/* Metrics grid */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.metric-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 14px 16px;
+  position: relative;
+  overflow: hidden;
+}
+.metric-card::after {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--teal);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .3s;
+}
+.metric-card:hover::after { transform: scaleX(1); }
+
+.metric-name {
+  font-size: 9px; color: var(--muted);
+  letter-spacing: .08em; text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.metric-val {
+  font-family: var(--font-head);
+  font-size: 22px; font-weight: 800;
+}
+.metric-val.pos { color: var(--teal); }
+.metric-val.neg { color: var(--rose); }
+.metric-val.neu { color: var(--blue); }
+
+/* Charts */
+.chart-grid-2 {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.chart-grid-equal {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.chart-grid-3 {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.chart-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 20px;
+}
+.chart-title {
+  font-family: var(--font-head);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+/* Latent space */
+.latent-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 20px;
+  margin-bottom: 12px;
+}
+
+/* Error toast */
+.toast {
+  display: none;
+  position: fixed;
+  bottom: 24px; right: 24px;
+  background: var(--rose);
+  color: white;
+  font-size: 12px;
+  padding: 12px 20px;
+  z-index: 999;
+  max-width: 360px;
+  animation: slideIn .3s ease;
+}
+.toast.active { display: block; }
+@keyframes slideIn {
+  from { transform: translateX(20px); opacity:0; }
+  to   { transform: translateX(0); opacity:1; }
+}
+
+/* Disclaimer */
+.disclaimer {
+  margin-top: 48px;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--amber);
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.disclaimer strong { color: var(--amber); }
+</style>
+</head>
+
+<body>
+<div class="app">
+
+<!-- ── Header ──────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <div class="logo-mark">N</div>
+    <div class="logo-text">NIFTY 50 &middot; <span>AI Recommender</span></div>
+  </div>
+  <div class="header-right">
+    <div class="status-pill">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Connecting…</span>
+    </div>
+  </div>
+</header>
+
+<!-- ── Sidebar ─────────────────────────────────────────── -->
+<aside class="sidebar">
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">Momentum</div>
+    <div class="slider-group">
+      <div class="slider-header">
+        <span class="slider-name">Tilt</span>
+        <span class="slider-val" id="val-momentum">+0.20</span>
+      </div>
+      <input type="range" id="momentum" min="-1" max="1" step="0.05" value="0.2"
+             oninput="updateVal('momentum', this.value)">
+      <div class="slider-labels"><span>Contrarian</span><span>Momentum</span></div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">Risk Profile</div>
+    <div class="slider-group">
+      <div class="slider-header">
+        <span class="slider-name">Risk Tolerance</span>
+        <span class="slider-val" id="val-risk">0.40</span>
+      </div>
+      <input type="range" id="risk" min="0" max="1" step="0.05" value="0.4"
+             oninput="updateVal('risk', this.value)">
+      <div class="slider-labels"><span>Conservative</span><span>Aggressive</span></div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">Income &amp; Valuation</div>
+    <div class="slider-group">
+      <div class="slider-header">
+        <span class="slider-name">Dividend Focus</span>
+        <span class="slider-val" id="val-dividend">0.30</span>
+      </div>
+      <input type="range" id="dividend" min="0" max="1" step="0.05" value="0.3"
+             oninput="updateVal('dividend', this.value)">
+      <div class="slider-labels"><span>Growth</span><span>Income</span></div>
+    </div>
+    <div class="slider-group">
+      <div class="slider-header">
+        <span class="slider-name">Value vs Growth</span>
+        <span class="slider-val" id="val-value">0.50</span>
+      </div>
+      <input type="range" id="value" min="0" max="1" step="0.05" value="0.5"
+             oninput="updateVal('value', this.value)">
+      <div class="slider-labels"><span>Growth</span><span>Deep Value</span></div>
+    </div>
+    <div class="slider-group">
+      <div class="slider-header">
+        <span class="slider-name">Quality Focus</span>
+        <span class="slider-val" id="val-quality">0.60</span>
+      </div>
+      <input type="range" id="quality" min="0" max="1" step="0.05" value="0.6"
+             oninput="updateVal('quality', this.value)">
+      <div class="slider-labels"><span>Don't care</span><span>High quality</span></div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">Sectors <span style="color:var(--muted);font-size:9px">(empty = all)</span></div>
+    <div class="chip-grid" id="sectorChips"></div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">Portfolio</div>
+    <div class="control-row">
+      <div class="select-wrap">
+        <label>Stocks (N)</label>
+        <input type="number" id="topK" value="8" min="3" max="20">
+      </div>
+      <div class="select-wrap">
+        <label>Max / Sector</label>
+        <input type="number" id="maxSector" value="3" min="1" max="5">
+      </div>
+    </div>
+    <div class="select-wrap" style="margin-bottom:16px">
+      <label>Weighting Scheme</label>
+      <select id="weighting">
+        <option value="equal">Equal Weight (1/N)</option>
+        <option value="similarity">Similarity Weight</option>
+        <option value="inv_vol">Inverse Volatility</option>
+      </select>
+    </div>
+  </div>
+
+  <button class="btn-run" id="btnRun" onclick="runRecommender()">
+    ▶ Run Recommender
+  </button>
+  <button class="btn-refresh" onclick="refreshPipeline()">
+    ↺ Refresh Data &amp; Retrain
+  </button>
+
+</aside>
+
+<!-- ── Main ────────────────────────────────────────────── -->
+<main class="main" id="main">
+
+  <!-- Landing -->
+  <div class="landing" id="landing">
+    <div class="landing-glyph">
+      <div class="landing-icon">📡</div>
+    </div>
+    <h2>Vector Embedding Recommender</h2>
+    <p>An autoencoder maps each NIFTY 50 stock into a latent embedding space. Your preferences are encoded the same way — then matched by cosine similarity.</p>
+    <div class="flow-diagram">
+      <div class="flow-box">Preferences</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box accent">Encoder</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">Latent Space</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box">Cosine Sim</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box accent">Portfolio + Backtest</div>
+    </div>
+    <p style="font-size:11px; color:var(--muted)">Set preferences in the sidebar and click <strong style="color:var(--teal)">Run Recommender</strong>.</p>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+
+    <!-- Recommendations -->
+    <div class="section-head">
+      <h3>Recommended Stocks</h3>
+      <div class="tag">Cosine Match</div>
+    </div>
+    <div class="stock-grid" id="stockGrid"></div>
+
+    <!-- Metrics -->
+    <div class="section-head">
+      <h3>5-Year Backtest Metrics</h3>
+      <div class="tag">vs NIFTY 50</div>
+    </div>
+    <div class="metrics-grid" id="metricsGrid"></div>
+
+    <!-- NAV + Drawdown -->
+    <div class="section-head"><h3>Performance</h3></div>
+    <div class="chart-grid-2">
+      <div class="chart-box">
+        <div class="chart-title">Portfolio NAV vs NIFTY 50 (Base ₹100)</div>
+        <div id="chartNav" style="height:260px"></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">Drawdown (%)</div>
+        <div id="chartDrawdown" style="height:260px"></div>
+      </div>
+    </div>
+
+    <!-- Heatmap + Rolling Sharpe -->
+    <div class="chart-grid-3">
+      <div class="chart-box">
+        <div class="chart-title">Monthly Return Heatmap (%)</div>
+        <div id="chartHeatmap" style="height:260px"></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">Rolling 1-Year Sharpe</div>
+        <div id="chartSharpe" style="height:260px"></div>
+      </div>
+    </div>
+
+    <!-- Distribution + Weights -->
+    <div class="chart-grid-equal">
+      <div class="chart-box">
+        <div class="chart-title">Daily Return Distribution</div>
+        <div id="chartDist" style="height:240px"></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">Portfolio Weights</div>
+        <div id="chartWeights" style="height:240px"></div>
+      </div>
+    </div>
+
+    <!-- Latent Space -->
+    <div class="section-head">
+      <h3>Autoencoder Latent Space</h3>
+      <div class="tag">PCA 2D Projection</div>
+    </div>
+    <div class="latent-box">
+      <div class="chart-title">Each point = one NIFTY 50 stock &nbsp;·&nbsp; ★ = your preference vector</div>
+      <div id="chartLatent" style="height:400px"></div>
+    </div>
+
+    <div class="disclaimer">
+      <strong>⚠ Educational project only.</strong>
+      This system is built for learning purposes. Backtest results do not guarantee future performance.
+      Past performance is not indicative of future results. Not financial advice. Data via Yahoo Finance.
+    </div>
+  </div>
+
+</main>
+</div>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loader-ring"></div>
+  <div class="loader-text" id="loaderText">Running pipeline…</div>
+  <div class="loader-sub" id="loaderSub"></div>
+</div>
+
+<!-- Error toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ── JS ───────────────────────────────────────────────── -->
+<script>
+const API = '';   // same-origin; change to 'http://localhost:8000' for dev
+
+const PLOTLY_CONFIG = { displayModeBar: false, responsive: true };
+const DARK = {
+  paper_bgcolor: 'rgba(0,0,0,0)',
+  plot_bgcolor:  'rgba(0,0,0,0)',
+  font:          { family: 'JetBrains Mono, monospace', color: '#5a6a8a', size: 10 },
+  margin:        { l:44, r:16, t:12, b:36 },
+  xaxis:  { gridcolor: '#1c253d', zerolinecolor: '#1c253d', tickfont: { size:9 } },
+  yaxis:  { gridcolor: '#1c253d', zerolinecolor: '#1c253d', tickfont: { size:9 } },
+  legend: { bgcolor: 'rgba(0,0,0,0)', font: { size:10 } },
+};
+
+// ── Init sectors ────────────────────────────────────────
+const SECTORS = [];
+const selectedSectors = new Set();
+
+async function loadStatus() {
+  try {
+    const res  = await fetch(`${API}/api/status`);
+    const data = await res.json();
+    if (data.ready) {
+      document.getElementById('statusDot').classList.add('ready');
+      document.getElementById('statusText').textContent =
+        `${data.stocks_loaded} stocks · ${data.date_start?.slice(0,7)} → ${data.date_end?.slice(0,7)}`;
+      SECTORS.push(...(data.sectors || []));
+      renderSectorChips();
+    }
+  } catch(e) {
+    document.getElementById('statusText').textContent = 'Pipeline loading…';
+  }
+}
+
+function renderSectorChips() {
+  const grid = document.getElementById('sectorChips');
+  grid.innerHTML = '';
+  SECTORS.forEach(s => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.textContent = s;
+    chip.onclick = () => {
+      if (selectedSectors.has(s)) { selectedSectors.delete(s); chip.classList.remove('active'); }
+      else { selectedSectors.add(s); chip.classList.add('active'); }
+    };
+    grid.appendChild(chip);
+  });
+}
+
+// ── Slider values ───────────────────────────────────────
+function updateVal(id, raw) {
+  const v   = parseFloat(raw);
+  const el  = document.getElementById(`val-${id}`);
+  el.textContent = (v >= 0 && id === 'momentum' ? '+' : '') + v.toFixed(2);
+}
+
+// ── Loader ──────────────────────────────────────────────
+const loaderMessages = [
+  ['Encoding preferences…', 'Mapping sliders → feature vector'],
+  ['Querying latent space…', 'Cosine similarity across all stocks'],
+  ['Constructing portfolio…', 'Applying weighting scheme'],
+  ['Running backtest…', 'Simulating 5 years of returns'],
+];
+let loaderInterval;
+
+function showLoader() {
+  let i = 0;
+  const ov = document.getElementById('loadingOverlay');
+  ov.classList.add('active');
+  setMsg(loaderMessages[0]);
+  loaderInterval = setInterval(() => {
+    i = (i + 1) % loaderMessages.length;
+    setMsg(loaderMessages[i]);
+  }, 1800);
+}
+function hideLoader() {
+  clearInterval(loaderInterval);
+  document.getElementById('loadingOverlay').classList.remove('active');
+}
+function setMsg([t, s]) {
+  document.getElementById('loaderText').textContent = t;
+  document.getElementById('loaderSub').textContent  = s;
+}
+
+function showError(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = '⚠ ' + msg;
+  t.classList.add('active');
+  setTimeout(() => t.classList.remove('active'), 5000);
+}
+
+// ── Run ─────────────────────────────────────────────────
+async function runRecommender() {
+  const btn = document.getElementById('btnRun');
+  btn.disabled = true;
+  showLoader();
+
+  const payload = {
+    momentum_tilt:  parseFloat(document.getElementById('momentum').value),
+    risk_tolerance: parseFloat(document.getElementById('risk').value),
+    dividend_focus: parseFloat(document.getElementById('dividend').value),
+    value_focus:    parseFloat(document.getElementById('value').value),
+    quality_focus:  parseFloat(document.getElementById('quality').value),
+    sectors:        [...selectedSectors],
+    top_k:          parseInt(document.getElementById('topK').value),
+    max_per_sector: parseInt(document.getElementById('maxSector').value),
+    weighting:      document.getElementById('weighting').value,
+  };
+
+  try {
+    const res = await fetch(`${API}/api/recommend`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Server error');
+    }
+    const data = await res.json();
+    hideLoader();
+    renderResults(data);
+  } catch(e) {
+    hideLoader();
+    showError(e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function refreshPipeline() {
+  showLoader();
+  document.getElementById('loaderText').textContent = 'Refreshing data & retraining…';
+  document.getElementById('loaderSub').textContent  = 'This may take several minutes';
+  try {
+    await fetch(`${API}/api/refresh`);
+    await loadStatus();
+  } finally { hideLoader(); }
+}
+
+// ── Render ──────────────────────────────────────────────
+function renderResults(data) {
+  document.getElementById('landing').style.display = 'none';
+  const res = document.getElementById('results');
+  res.classList.add('visible');
+
+  renderStockCards(data.recommendations);
+  renderMetrics(data.metrics);
+  renderCharts(data.charts, data.portfolio, data.latent_space);
+  res.scrollIntoView({ behavior: 'smooth' });
+}
+
+function renderStockCards(recs) {
+  const grid = document.getElementById('stockGrid');
+  grid.innerHTML = '';
+  recs.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'stock-card';
+    div.innerHTML = `
+      <div class="card-rank">#${r.rank} · ${r.sector}</div>
+      <div class="card-ticker">${r.ticker}</div>
+      <div class="card-sector">${r.sector}</div>
+      <div class="card-match">${(r.similarity * 100).toFixed(1)}%</div>
+      <div class="card-stats">
+        <div class="card-stat"><span>Weight</span><span>${r.weight}%</span></div>
+        <div class="card-stat"><span>Sharpe</span><span>${r.sharpe ?? '—'}</span></div>
+        <div class="card-stat"><span>Vol</span><span>${r.volatility != null ? r.volatility + '%' : '—'}</span></div>
+        <div class="card-stat"><span>12M Ret</span><span>${r.mom_12m != null ? (r.mom_12m > 0 ? '+' : '') + r.mom_12m + '%' : '—'}</span></div>
+        <div class="card-stat"><span>P/E</span><span>${r.pe_ratio ?? '—'}</span></div>
+      </div>`;
+    grid.appendChild(div);
+  });
+}
+
+function metricClass(key, val) {
+  if (key.includes('Drawdown')) return val < 0 ? 'neg' : 'pos';
+  if (key.includes('Beta')) return 'neu';
+  return val > 0 ? 'pos' : (val < 0 ? 'neg' : 'neu');
+}
+
+function renderMetrics(metrics) {
+  const grid = document.getElementById('metricsGrid');
+  grid.innerHTML = '';
+  Object.entries(metrics).forEach(([k, v]) => {
+    const div = document.createElement('div');
+    div.className = 'metric-card';
+    const cls = metricClass(k, v);
+    div.innerHTML = `
+      <div class="metric-name">${k}</div>
+      <div class="metric-val ${cls}">${v}</div>`;
+    grid.appendChild(div);
+  });
+}
+
+function renderCharts(charts, portfolio, latent) {
+  // NAV
+  Plotly.newPlot('chartNav', [
+    {
+      x: charts.portfolio_nav.dates, y: charts.portfolio_nav.values,
+      name: 'Portfolio', type: 'scatter', mode: 'lines',
+      line: { color: '#00e5b0', width: 2 },
+      fill: 'tozeroy', fillcolor: 'rgba(0,229,176,0.06)',
+    },
+    {
+      x: charts.benchmark_nav.dates, y: charts.benchmark_nav.values,
+      name: 'NIFTY 50', type: 'scatter', mode: 'lines',
+      line: { color: '#ffaa00', width: 1.5, dash: 'dash' },
+    },
+  ], { ...DARK, showlegend: true }, PLOTLY_CONFIG);
+
+  // Drawdown
+  Plotly.newPlot('chartDrawdown', [{
+    x: charts.drawdown.dates, y: charts.drawdown.values,
+    type: 'scatter', mode: 'lines', fill: 'tozeroy',
+    line: { color: '#ff4570', width: 1.5 },
+    fillcolor: 'rgba(255,69,112,0.12)',
+    name: 'Drawdown',
+  }], { ...DARK, showlegend: false }, PLOTLY_CONFIG);
+
+  // Rolling Sharpe
+  Plotly.newPlot('chartSharpe', [
+    {
+      x: charts.rolling_sharpe.dates, y: charts.rolling_sharpe.values,
+      type: 'scatter', mode: 'lines',
+      line: { color: '#3d8eff', width: 2 }, name: 'Rolling Sharpe',
+    },
+  ], {
+    ...DARK,
+    shapes: [{ type:'line', x0:charts.rolling_sharpe.dates[0],
+      x1: charts.rolling_sharpe.dates.at(-1), y0:1, y1:1,
+      line: { color:'#263049', dash:'dot', width:1 } }],
+    showlegend: false,
+  }, PLOTLY_CONFIG);
+
+  // Monthly heatmap
+  const h = charts.heatmap;
+  Plotly.newPlot('chartHeatmap', [{
+    type: 'heatmap',
+    z: h.values, x: h.months, y: h.years.map(String),
+    colorscale: [[0,'#c0392b'],[0.5,'#101628'],[1,'#00e5b0']],
+    zmid: 0,
+    text: h.values.map(row => row.map(v => v.toFixed(1) + '%')),
+    texttemplate: '%{text}',
+    textfont: { size: 9 },
+    colorbar: { tickfont: { color:'#5a6a8a', size:9 }, thickness: 10 },
+    hovertemplate: '%{y} %{x}: %{z:.2f}%<extra></extra>',
+  }], {
+    ...DARK,
+    margin: { l:44, r:60, t:12, b:36 },
+    xaxis: { ...DARK.xaxis, side:'bottom' },
+  }, PLOTLY_CONFIG);
+
+  // Return distribution
+  Plotly.newPlot('chartDist', [
+    {
+      x: charts.port_daily, name: 'Portfolio',
+      type: 'histogram', nbinsx: 60,
+      marker: { color: 'rgba(0,229,176,0.6)' },
+      opacity: 0.8,
+    },
+    {
+      x: charts.bench_daily, name: 'NIFTY 50',
+      type: 'histogram', nbinsx: 60,
+      marker: { color: 'rgba(255,170,0,0.5)' },
+      opacity: 0.7,
+    },
+  ], { ...DARK, barmode: 'overlay', showlegend: true,
+       xaxis: { ...DARK.xaxis, title: 'Daily Return (%)' } },
+  PLOTLY_CONFIG);
+
+  // Weights pie
+  const tickers = Object.keys(portfolio.weights);
+  const vals    = Object.values(portfolio.weights);
+  const COLORS  = ['#00e5b0','#ffaa00','#3d8eff','#ff4570','#9b59b6',
+                   '#00cec9','#fdcb6e','#6c5ce7','#fd79a8','#e17055',
+                   '#74b9ff','#55efc4','#ffeaa7','#dfe6e9','#b2bec3',
+                   '#a29bfe','#81ecec','#fab1a0','#636e72','#2d3436'];
+  Plotly.newPlot('chartWeights', [{
+    type: 'pie', labels: tickers, values: vals,
+    hole: 0.45,
+    marker: { colors: COLORS.slice(0, tickers.length) },
+    textfont: { color: '#ccd6f6', size: 10 },
+    hovertemplate: '%{label}: %{value:.1f}%<extra></extra>',
+  }], {
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    font: { family: 'JetBrains Mono, monospace', color: '#5a6a8a', size: 10 },
+    legend: { bgcolor: 'rgba(0,0,0,0)', font: { size: 9 } },
+    margin: { l:16, r:16, t:12, b:16 },
+    showlegend: true,
+  }, PLOTLY_CONFIG);
+
+  // Latent space
+  const pts       = latent.points;
+  const recPts    = pts.filter(p => p.recommended);
+  const otherPts  = pts.filter(p => !p.recommended);
+
+  Plotly.newPlot('chartLatent', [
+    {
+      x: otherPts.map(p=>p.x), y: otherPts.map(p=>p.y),
+      text: otherPts.map(p=>`${p.ticker}<br>${p.sector}`),
+      mode: 'markers+text', type: 'scatter',
+      textfont: { size:8, color:'#5a6a8a' },
+      textposition: 'top center',
+      marker: { size:8, color:'#1c253d', line:{color:'#263049',width:1} },
+      name: 'Other stocks',
+      hovertemplate: '%{text}<extra></extra>',
+    },
+    {
+      x: recPts.map(p=>p.x), y: recPts.map(p=>p.y),
+      text: recPts.map(p=>`${p.ticker}<br>${p.sector}`),
+      mode: 'markers+text', type: 'scatter',
+      textfont: { size:10, color:'#00e5b0', family:'Syne,sans-serif' },
+      textposition: 'top center',
+      marker: { size:14, color:'#00e5b0', line:{color:'#fff',width:1.5} },
+      name: 'Recommended',
+      hovertemplate: '%{text}<extra></extra>',
+    },
+    {
+      x: [latent.user.x], y: [latent.user.y],
+      text: ['YOU ★'],
+      mode: 'markers+text', type: 'scatter',
+      textfont: { size:12, color:'#ffaa00', family:'Syne,sans-serif' },
+      textposition: 'top center',
+      marker: { size:20, color:'#ffaa00', symbol:'star', line:{color:'#fff',width:2} },
+      name: 'Your Preference',
+      hovertemplate: 'Your preference vector<extra></extra>',
+    },
+  ], {
+    ...DARK,
+    showlegend: true,
+    xaxis: { ...DARK.xaxis, title: `PC1 (${latent.variance[0]}% var)` },
+    yaxis: { ...DARK.yaxis, title: `PC2 (${latent.variance[1]}% var)` },
+    margin: { l:52, r:16, t:16, b:48 },
+  }, PLOTLY_CONFIG);
+}
+
+// ── Boot ────────────────────────────────────────────────
+loadStatus();
+</script>
+</body>
+</html>
